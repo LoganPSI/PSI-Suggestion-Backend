@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSI Suggestion Box</title>
+<style>
+  :root{
+    --psi-blue: #014BA4;
+    --psi-blue-dark: #013165;
+    --psi-blue-tint: #EAF2FC;
+    --psi-grey: #6B7280;
+    --psi-grey-light: #E5E7EB;
+    --ink: #12203A;
+    --white: #FFFFFF;
+    --good: #1E8E3E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(180deg, var(--psi-blue-tint) 0%, #ffffff 260px);
+    color: var(--ink);
+    min-height:100vh;
+  }
+  .wrap{
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-bottom: 28px;
+  }
+  .pentagon{
+    width:52px; height:52px; flex-shrink:0;
+  }
+  .brand-text .name{
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    color: var(--psi-blue);
+    line-height:1.15;
+  }
+  .brand-text .tagline{
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--psi-grey);
+    margin-top:2px;
+  }
+  .card{
+    background: var(--white);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(1,75,164,0.08), 0 10px 30px rgba(1,49,101,0.07);
+    padding: 32px 28px 34px;
+    border: 1px solid #EEF2F7;
+  }
+  h1{
+    font-size: 24px;
+    margin: 0 0 6px;
+    color: var(--psi-blue-dark);
+    letter-spacing: -0.01em;
+  }
+  .sub{
+    color: var(--psi-grey);
+    font-size: 14.5px;
+    margin: 0 0 26px;
+    line-height:1.5;
+  }
+  label{
+    display:block;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--psi-blue-dark);
+    margin-bottom: 7px;
+  }
+  .req{ color:#C0392B; font-weight:700; }
+  .field{ margin-bottom: 22px; }
+  input[type=text], textarea{
+    width:100%;
+    border: 1.5px solid var(--psi-grey-light);
+    border-radius: 9px;
+    padding: 12px 14px;
+    font-size: 14.5px;
+    font-family: inherit;
+    color: var(--ink);
+    background: #FBFCFE;
+    transition: border-color .15s, box-shadow .15s;
+    resize: vertical;
+  }
+  input[type=text]:focus, textarea:focus{
+    outline:none;
+    border-color: var(--psi-blue);
+    box-shadow: 0 0 0 3px rgba(1,75,164,0.12);
+    background: var(--white);
+  }
+  textarea{ min-height: 78px; }
+  .hint{
+    font-size: 12px;
+    color: var(--psi-grey);
+    margin-top: 5px;
+    font-weight:500;
+  }
+  .divider{
+    border:none;
+    border-top: 1px solid #EEF2F7;
+    margin: 26px 0;
+  }
+  button.submit{
+    width:100%;
+    background: var(--psi-blue);
+    color:white;
+    border:none;
+    border-radius: 10px;
+    padding: 15px 20px;
+    font-size: 15.5px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    cursor:pointer;
+    transition: background .15s, transform .05s;
+  }
+  button.submit:hover{ background: var(--psi-blue-dark); }
+  button.submit:active{ transform: translateY(1px); }
+  button.submit:disabled{ background:#9AA6B5; cursor:not-allowed; }
+  .status{
+    margin-top: 14px;
+    font-size: 13.5px;
+    text-align:center;
+    min-height:18px;
+    font-weight:600;
+  }
+  .status.error{ color:#C0392B; }
+  .success-screen{
+    text-align:center;
+    padding: 20px 6px 6px;
+  }
+  .success-screen .tick{
+    width:56px;height:56px;border-radius:50%;
+    background: var(--psi-blue-tint);
+    display:flex;align-items:center;justify-content:center;
+    margin: 0 auto 18px;
+  }
+  .success-screen h2{
+    color: var(--psi-blue-dark);
+    margin: 0 0 8px;
+    font-size:20px;
+  }
+  .success-screen p{
+    color: var(--psi-grey);
+    font-size:14px;
+    margin:0 0 22px;
+  }
+  .again{
+    background:none;
+    border: 1.5px solid var(--psi-blue);
+    color: var(--psi-blue);
+    padding: 10px 18px;
+    border-radius: 9px;
+    font-weight:700;
+    font-size:13.5px;
+    cursor:pointer;
+  }
+  .again:hover{ background: var(--psi-blue-tint); }
+  footer{
+    text-align:center;
+    color:#9AA6B5;
+    font-size:11.5px;
+    margin-top: 22px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">
+    <svg class="pentagon" viewBox="0 0 100 100">
+      <polygon points="50,4 96,38 78,92 22,92 4,38" fill="none" stroke="#014BA4" stroke-width="6"/>
+      <text x="50" y="60" font-family="Arial, sans-serif" font-weight="800" font-size="30" fill="#014BA4" text-anchor="middle">PSI</text>
+    </svg>
+    <div class="brand-text">
+      <div class="name">PENTAGON SERVICE AND INSTALLATION</div>
+      <div class="tagline">AIR &nbsp;·&nbsp; GAS &nbsp;·&nbsp; OIL &nbsp;·&nbsp; VACUUM &nbsp;·&nbsp; WATER</div>
+    </div>
+  </div>
+
+  <div class="card" id="card">
+    <div id="formView">
+      <h1>Suggestion Form</h1>
+      <p class="sub">Got an idea to make things better around here — for the workplace or for our customers? Tell us. It only takes a minute.</p>
+
+      <form id="suggForm">
+        <div class="field">
+          <label>Your name <span class="req">*</span></label>
+          <input type="text" id="fullName" placeholder="First and last name" required>
+        </div>
+
+        <hr class="divider">
+
+        <div class="field">
+          <label>Do you have any suggestions for improving the workplace?</label>
+          <textarea id="q1" placeholder="e.g. equipment, facilities, day-to-day processes..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Do you have any suggestions to improve the customer experience?</label>
+          <textarea id="q2" placeholder="e.g. communication, service, turnaround times..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Do you have any concerns or ideas around safety?</label>
+          <textarea id="q3" placeholder="e.g. site safety, vehicles, tools, PPE..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Do you have any suggestions about tools or equipment?</label>
+          <textarea id="q4" placeholder="e.g. what's missing, what's outdated, what would help..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Other suggestions</label>
+          <textarea id="other" placeholder="Anything else on your mind — this box is for whatever doesn't fit above."></textarea>
+        </div>
+
+        <button type="submit" class="submit" id="submitBtn">Submit suggestion</button>
+        <div class="status" id="status"></div>
+      </form>
+    </div>
+
+    <div class="success-screen" id="successView" style="display:none;">
+      <div class="tick">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#014BA4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h2>Thanks — that's been sent through</h2>
+      <p>Your suggestion has been submitted to management. We appreciate you taking the time.</p>
+      <button class="again" id="againBtn">Submit another suggestion</button>
+    </div>
+  </div>
+
+  <footer>PSI Suggestion Form - Responses go to Management only</footer>
+</div>
+
+<script>
+const form = document.getElementById('suggForm');
+const statusEl = document.getElementById('status');
+const submitBtn = document.getElementById('submitBtn');
+const formView = document.getElementById('formView');
+const successView = document.getElementById('successView');
+const againBtn = document.getElementById('againBtn');
+
+function resetForm(){
+  form.reset();
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+  formView.style.display = '';
+  successView.style.display = 'none';
+}
+
+againBtn.addEventListener('click', resetForm);
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  statusEl.className = 'status';
+  statusEl.textContent = '';
+
+  const name = document.getElementById('fullName').value.trim();
+  if(!name){
+    statusEl.textContent = 'Please enter your name before submitting.';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  const q1 = document.getElementById('q1').value.trim();
+  const q2 = document.getElementById('q2').value.trim();
+  const q3 = document.getElementById('q3').value.trim();
+  const q4 = document.getElementById('q4').value.trim();
+  const other = document.getElementById('other').value.trim();
+
+  if(!q1 && !q2 && !q3 && !q4 && !other){
+    statusEl.textContent = 'Please fill in at least one suggestion before submitting.';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
+
+  try{
+    const response = await fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, q1, q2, q3, q4, other })
+    });
+    const data = await response.json();
+    if(!response.ok){
+      throw new Error(data.error || 'Something went wrong.');
+    }
+    formView.style.display = 'none';
+    successView.style.display = '';
+  }catch(err){
+    statusEl.textContent = err.message || 'Something went wrong submitting this — please try again.';
+    statusEl.className = 'status error';
+  }finally{
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit suggestion';
+  }
+});
+</script>
+</body>
+</html>

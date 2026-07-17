@@ -1,0 +1,13 @@
+{
+  "name": "psi-suggestion-backend",
+  "version": "1.0.0",
+  "description": "PSI Suggestion Form backend — stores submissions in Postgres and serves the form + dashboard.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  }
+}

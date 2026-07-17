@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSI Suggestions — Management Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --psi-blue: #014BA4;
+    --psi-blue-dark: #013165;
+    --psi-blue-tint: #EAF2FC;
+    --psi-grey: #6B7280;
+    --psi-grey-light: #E5E7EB;
+    --ink: #12203A;
+    --white: #FFFFFF;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #F5F7FA;
+    color: var(--ink);
+  }
+  .wrap{ max-width: 980px; margin:0 auto; padding: 28px 20px 80px; }
+
+  /* --- Lock screen --- */
+  .lock-wrap{
+    max-width: 380px; margin: 90px auto; text-align:center;
+  }
+  .lock-wrap .pentagon{ width:56px;height:56px;margin:0 auto 14px; }
+  .lock-wrap h1{ font-size:19px; color:var(--psi-blue-dark); margin:0 0 6px;}
+  .lock-wrap p{ color:var(--psi-grey); font-size:13.5px; margin:0 0 20px; }
+  .lock-wrap input{
+    width:100%; padding:12px 14px; border:1.5px solid var(--psi-grey-light);
+    border-radius:9px; font-size:14.5px; margin-bottom:12px; text-align:center;
+    letter-spacing:2px;
+  }
+  .lock-wrap button{
+    width:100%; background:var(--psi-blue); color:#fff; border:none;
+    padding:12px; border-radius:9px; font-weight:700; font-size:14.5px; cursor:pointer;
+  }
+  .lock-wrap button:hover{ background:var(--psi-blue-dark); }
+  .lock-err{ color:#C0392B; font-size:12.5px; margin-top:8px; min-height:16px; font-weight:600; }
+  .lock-note{ font-size:11px; color:#9AA6B5; margin-top:16px; line-height:1.5; }
+
+  /* --- Header --- */
+  header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:12px; }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand svg{ width:40px;height:40px; }
+  .brand .name{ font-size:13px; font-weight:800; color:var(--psi-blue); letter-spacing:.02em; }
+  .brand .sub{ font-size:11px; color:var(--psi-grey); font-weight:600; }
+  .lockout-btn{ font-size:12px; color:var(--psi-grey); background:none; border:none; cursor:pointer; text-decoration:underline; }
+
+  /* --- Stat cards --- */
+  .stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:24px; }
+  .stat{
+    background:white; border-radius:12px; padding:16px 18px; border:1px solid #EEF2F7;
+    box-shadow:0 1px 2px rgba(1,49,101,.05);
+  }
+  .stat .num{ font-size:26px; font-weight:800; color:var(--psi-blue-dark); }
+  .stat .lbl{ font-size:12px; color:var(--psi-grey); font-weight:600; margin-top:2px;}
+
+  /* --- Report bar --- */
+  .report-bar{
+    background:white; border:1px solid #EEF2F7; border-radius:12px; padding:18px 20px;
+    margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;
+  }
+  .report-bar .rb-text h3{ margin:0 0 3px; font-size:15px; color:var(--psi-blue-dark); }
+  .report-bar .rb-text p{ margin:0; font-size:12.5px; color:var(--psi-grey); max-width:480px; }
+  .btn-primary{
+    background:var(--psi-blue); color:#fff; border:none; padding:11px 18px; border-radius:9px;
+    font-weight:700; font-size:13.5px; cursor:pointer; white-space:nowrap;
+  }
+  .btn-primary:hover{ background:var(--psi-blue-dark); }
+  .btn-secondary{
+    background:var(--psi-blue-tint); color:var(--psi-blue-dark); border:none; padding:11px 18px; border-radius:9px;
+    font-weight:700; font-size:13.5px; cursor:pointer; white-space:nowrap;
+  }
+  .btn-secondary:hover{ background:#DCEAFA; }
+
+  /* --- Controls --- */
+  .controls{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .seg{ display:flex; background:white; border:1px solid #EEF2F7; border-radius:9px; overflow:hidden; }
+  .seg button{
+    border:none; background:transparent; padding:9px 16px; font-size:13px; font-weight:700;
+    color:var(--psi-grey); cursor:pointer;
+  }
+  .seg button.active{ background:var(--psi-blue); color:white; }
+  select{
+    border:1px solid #EEF2F7; border-radius:9px; padding:9px 12px; font-size:13px; font-weight:600;
+    color:var(--ink); background:white;
+  }
+  .refresh{ margin-left:auto; font-size:12.5px; color:var(--psi-blue); background:none; border:none; cursor:pointer; font-weight:700; }
+
+  /* --- Groups / entries --- */
+  .group{ margin-bottom:22px; }
+  .group-title{
+    font-size:13px; font-weight:800; color:var(--psi-blue-dark); text-transform:uppercase;
+    letter-spacing:.04em; margin-bottom:10px; display:flex; align-items:center; gap:8px;
+  }
+  .group-title .count{
+    background:var(--psi-blue-tint); color:var(--psi-blue-dark); font-size:11px; padding:2px 8px;
+    border-radius:20px; font-weight:700;
+  }
+  .entry{
+    background:white; border:1px solid #EEF2F7; border-radius:11px; padding:16px 18px; margin-bottom:10px;
+  }
+  .entry-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; flex-wrap:wrap; gap:6px;}
+  .entry-name{ font-weight:800; color:var(--ink); font-size:14.5px; }
+  .entry-date{ font-size:11.5px; color:var(--psi-grey); font-weight:600; }
+  .qa{ margin-top:8px; }
+  .qa .q{ font-size:12px; font-weight:700; color:var(--psi-blue); margin-bottom:2px; }
+  .qa .a{ font-size:13.5px; color:var(--ink); line-height:1.45; margin-bottom:10px; white-space:pre-wrap; }
+  .empty{ text-align:center; padding:50px 20px; color:var(--psi-grey); }
+  .empty svg{ margin-bottom:10px; opacity:.5; }
+  .loading{ text-align:center; padding:60px 20px; color:var(--psi-grey); font-size:13.5px; }
+</style>
+</head>
+<body>
+
+<div id="lockScreen" class="lock-wrap">
+  <svg class="pentagon" viewBox="0 0 100 100">
+    <polygon points="50,4 96,38 78,92 22,92 4,38" fill="none" stroke="#014BA4" stroke-width="6"/>
+    <text x="50" y="60" font-family="Arial, sans-serif" font-weight="800" font-size="30" fill="#014BA4" text-anchor="middle">PSI</text>
+  </svg>
+  <h1>Management Access</h1>
+  <p>Enter the access code to view suggestion box submissions.</p>
+  <input type="password" id="passInput" placeholder="Access code" maxlength="20">
+  <button id="unlockBtn">View dashboard</button>
+  <div class="lock-err" id="lockErr"></div>
+  <div class="lock-note">This is a basic passcode screen, not real authentication — anyone with this link and code can view responses. Don't share this link outside management.</div>
+</div>
+
+<div class="wrap" id="dashboard" style="display:none;">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 100 100"><polygon points="50,4 96,38 78,92 22,92 4,38" fill="none" stroke="#014BA4" stroke-width="6"/><text x="50" y="60" font-family="Arial, sans-serif" font-weight="800" font-size="30" fill="#014BA4" text-anchor="middle">PSI</text></svg>
+      <div>
+        <div class="name">SUGGESTION BOX — MANAGEMENT DASHBOARD</div>
+        <div class="sub">All submissions since launch</div>
+      </div>
+    </div>
+    <button class="lockout-btn" id="lockOutBtn">Lock screen</button>
+  </header>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="report-bar">
+    <div class="rb-text">
+      <h3>Instant report — start of this week to now</h3>
+      <p>Builds a PDF of every suggestion from Monday 12:00am up to this moment, and opens an email pre-addressed to Greg and Logan so you can attach and send it.</p>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn-primary" id="instantReportBtn">Generate instant report</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="seg">
+      <button id="viewWeekly" class="active">Weekly</button>
+      <button id="viewMonthly">Monthly</button>
+    </div>
+    <select id="periodSelect"></select>
+    <button class="btn-secondary" id="periodReportBtn">Download report for this period</button>
+    <button class="refresh" id="refreshBtn">↻ Refresh</button>
+  </div>
+
+  <div id="content"><div class="loading">Loading submissions…</div></div>
+</div>
+
+<script>
+let currentPasscode = ""; // set when the user unlocks; sent with every API request
+
+const lockScreen = document.getElementById('lockScreen');
+const dashboard = document.getElementById('dashboard');
+const passInput = document.getElementById('passInput');
+const unlockBtn = document.getElementById('unlockBtn');
+const lockErr = document.getElementById('lockErr');
+const lockOutBtn = document.getElementById('lockOutBtn');
+
+unlockBtn.addEventListener('click', tryUnlock);
+passInput.addEventListener('keydown', e => { if(e.key === 'Enter') tryUnlock(); });
+
+async function tryUnlock(){
+  const code = passInput.value;
+  lockErr.textContent = '';
+  unlockBtn.disabled = true;
+  unlockBtn.textContent = 'Checking...';
+  try{
+    const res = await fetch('/api/submissions', { headers: { 'x-passcode': code } });
+    if(res.status === 401){
+      lockErr.textContent = 'Incorrect code — try again.';
+      return;
+    }
+    if(!res.ok) throw new Error('Server error');
+    currentPasscode = code;
+    lockScreen.style.display = 'none';
+    dashboard.style.display = '';
+    loadData();
+  }catch(e){
+    lockErr.textContent = 'Could not reach the server — try again.';
+  }finally{
+    unlockBtn.disabled = false;
+    unlockBtn.textContent = 'View dashboard';
+  }
+}
+lockOutBtn.addEventListener('click', () => {
+  dashboard.style.display = 'none';
+  lockScreen.style.display = '';
+  passInput.value = '';
+  lockErr.textContent = '';
+  currentPasscode = '';
+});
+
+let allEntries = [];
+let viewMode = 'weekly';
+
+async function loadData(){
+  document.getElementById('content').innerHTML = '<div class="loading">Loading submissions…</div>';
+  try{
+    const res = await fetch('/api/submissions', { headers: { 'x-passcode': currentPasscode } });
+    if(!res.ok) throw new Error('Server error');
+    const rows = await res.json();
+    allEntries = rows;
+    renderStats();
+    populatePeriodSelect();
+    renderGroups();
+  }catch(e){
+    document.getElementById('content').innerHTML = '<div class="empty">Could not load submissions. Try refreshing.</div>';
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', loadData);
+
+function startOfWeek(d){
+  const date = new Date(d);
+  const day = date.getDay(); // 0 = Sunday
+  const diff = (day === 0 ? -6 : 1) - day; // shift to Monday
+  date.setDate(date.getDate() + diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+function startOfMonth(d){
+  const date = new Date(d.getFullYear(), d.getMonth(), 1);
+  return date;
+}
+
+function renderStats(){
+  const now = new Date();
+  const wkStart = startOfWeek(now);
+  const moStart = startOfMonth(now);
+  const total = allEntries.length;
+  const thisWeek = allEntries.filter(e => new Date(e.submitted_at) >= wkStart).length;
+  const thisMonth = allEntries.filter(e => new Date(e.submitted_at) >= moStart).length;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Total submissions (all time)</div></div>
+    <div class="stat"><div class="num">${thisWeek}</div><div class="lbl">This week</div></div>
+    <div class="stat"><div class="num">${thisMonth}</div><div class="lbl">This month</div></div>
+  `;
+}
+
+function weekLabel(d){
+  const s = startOfWeek(d);
+  const e = new Date(s); e.setDate(e.getDate()+6);
+  const fmt = x => x.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+  return `Week of ${fmt(s)} – ${fmt(e)}, ${e.getFullYear()}`;
+}
+function monthLabel(d){
+  return d.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+}
+
+function groupKey(entry){
+  const d = new Date(entry.submitted_at);
+  if(viewMode === 'weekly') return startOfWeek(d).toISOString();
+  return startOfMonth(d).toISOString();
+}
+
+function renderGroups(){
+  const content = document.getElementById('content');
+  if(allEntries.length === 0){
+    content.innerHTML = `<div class="empty">No suggestions submitted yet.<br>Once the form is shared, responses will appear here automatically.</div>`;
+    return;
+  }
+  const groups = {};
+  for(const entry of allEntries){
+    const gk = groupKey(entry);
+    if(!groups[gk]) groups[gk] = [];
+    groups[gk].push(entry);
+  }
+  const sortedKeys = Object.keys(groups).sort((a,b) => new Date(b) - new Date(a));
+
+  let html = '';
+  for(const gk of sortedKeys){
+    const d = new Date(gk);
+    const label = viewMode === 'weekly' ? weekLabel(d) : monthLabel(d);
+    const items = groups[gk];
+    html += `<div class="group"><div class="group-title">${label} <span class="count">${items.length}</span></div>`;
+    for(const e of items){
+      html += renderEntry(e);
+    }
+    html += `</div>`;
+  }
+  content.innerHTML = html;
+}
+
+function esc(s){
+  if(!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const QUESTION_LABELS = [
+  "Workplace improvements",
+  "Customer experience",
+  "Safety",
+  "Tools & equipment"
+];
+
+function renderEntry(e){
+  const date = new Date(e.submitted_at);
+  const dateStr = date.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}) + ' · ' + date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+  let qaHtml = '';
+  [e.q1, e.q2, e.q3, e.q4].forEach((answer, i) => {
+    if(answer && answer.trim()){
+      qaHtml += `<div class="qa"><div class="q">${esc(QUESTION_LABELS[i])}</div><div class="a">${esc(answer)}</div></div>`;
+    }
+  });
+  if(e.other){
+    qaHtml += `<div class="qa"><div class="q">Other suggestions</div><div class="a">${esc(e.other)}</div></div>`;
+  }
+  if(!qaHtml){
+    qaHtml = `<div class="qa"><div class="a" style="color:#9AA6B5;">No details provided.</div></div>`;
+  }
+  return `<div class="entry">
+    <div class="entry-head">
+      <div class="entry-name">${esc(e.name)}</div>
+      <div class="entry-date">${dateStr}</div>
+    </div>
+    ${qaHtml}
+  </div>`;
+}
+
+document.getElementById('viewWeekly').addEventListener('click', () => {
+  viewMode = 'weekly';
+  document.getElementById('viewWeekly').classList.add('active');
+  document.getElementById('viewMonthly').classList.remove('active');
+  populatePeriodSelect();
+  renderGroups();
+});
+document.getElementById('viewMonthly').addEventListener('click', () => {
+  viewMode = 'monthly';
+  document.getElementById('viewMonthly').classList.add('active');
+  document.getElementById('viewWeekly').classList.remove('active');
+  populatePeriodSelect();
+  renderGroups();
+});
+
+function populatePeriodSelect(){
+  const sel = document.getElementById('periodSelect');
+  const groups = {};
+  for(const entry of allEntries){
+    const gk = groupKey(entry);
+    groups[gk] = true;
+  }
+  const sortedKeys = Object.keys(groups).sort((a,b) => new Date(b) - new Date(a));
+  if(sortedKeys.length === 0){
+    sel.innerHTML = '<option>No data yet</option>';
+    return;
+  }
+  sel.innerHTML = sortedKeys.map(gk => {
+    const d = new Date(gk);
+    const label = viewMode === 'weekly' ? weekLabel(d) : monthLabel(d);
+    return `<option value="${gk}">${label}</option>`;
+  }).join('');
+}
+
+/* ---------- PDF report generation ---------- */
+
+function buildPdf(entries, title, subtitle){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const marginX = 48;
+  let y = 56;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const maxWidth = pageWidth - marginX*2;
+
+  doc.setTextColor(1, 75, 164);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(18);
+  doc.text('Pentagon Service and Installation', marginX, y);
+  y += 20;
+  doc.setFontSize(13);
+  doc.setTextColor(18,32,58);
+  doc.text(title, marginX, y);
+  y += 16;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(107,114,128);
+  doc.text(subtitle, marginX, y);
+  y += 10;
+  doc.setDrawColor(234,242,252);
+  doc.line(marginX, y, pageWidth-marginX, y);
+  y += 22;
+
+  function ensureSpace(lines){
+    if(y + lines*14 > pageHeight - 50){
+      doc.addPage();
+      y = 56;
+    }
+  }
+
+  if(entries.length === 0){
+    doc.setFont('helvetica','italic');
+    doc.setFontSize(11);
+    doc.setTextColor(107,114,128);
+    doc.text('No suggestions were submitted in this period.', marginX, y);
+  }
+
+  entries.forEach((e, idx) => {
+    ensureSpace(4);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(11.5);
+    doc.setTextColor(1, 49, 101);
+    const dateStr = new Date(e.submitted_at).toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}) + ' ' + new Date(e.submitted_at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+    doc.text(`${idx+1}. ${e.name}`, marginX, y);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107,114,128);
+    doc.text(dateStr, pageWidth - marginX, y, { align: 'right' });
+    y += 16;
+
+    const qas = [];
+    [e.q1, e.q2, e.q3, e.q4].forEach((answer, i) => { if(answer && answer.trim()) qas.push([QUESTION_LABELS[i], answer]); });
+    if(e.other) qas.push(['Other suggestions', e.other]);
+    if(qas.length === 0) qas.push(['', 'No details provided.']);
+
+    qas.forEach(([q, a]) => {
+      ensureSpace(3);
+      if(q){
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(1, 75, 164);
+        doc.text(q, marginX, y);
+        y += 12;
+      }
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(10);
+      doc.setTextColor(18,32,58);
+      const lines = doc.splitTextToSize(a, maxWidth);
+      lines.forEach(line => {
+        ensureSpace(1);
+        doc.text(line, marginX, y);
+        y += 13;
+      });
+      y += 6;
+    });
+    y += 8;
+    ensureSpace(1);
+    doc.setDrawColor(238,242,247);
+    doc.line(marginX, y, pageWidth-marginX, y);
+    y += 18;
+  });
+
+  return doc;
+}
+
+function openReportEmail(subject){
+  const body = "Hi Greg and Logan,%0D%0A%0D%0APlease find attached the suggestion box report.%0D%0A(The PDF has been downloaded to this computer — please attach it manually before sending.)%0D%0A%0D%0AThanks";
+  const mailto = `mailto:greg.t@psigroup.net.au,logan.t@psigroup.net.au?subject=${encodeURIComponent(subject)}&body=${body}`;
+  window.location.href = mailto;
+}
+
+document.getElementById('instantReportBtn').addEventListener('click', () => {
+  const now = new Date();
+  const wkStart = startOfWeek(now);
+  const entries = allEntries.filter(e => new Date(e.submitted_at) >= wkStart && new Date(e.submitted_at) <= now)
+                             .sort((a,b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+  const title = 'Instant Suggestion Report';
+  const subtitle = `${wkStart.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})} to ${now.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})} (${entries.length} submission${entries.length===1?'':'s'})`;
+  const doc = buildPdf(entries, title, subtitle);
+  const filename = `PSI-Suggestions-Instant-${now.toISOString().slice(0,10)}.pdf`;
+  doc.save(filename);
+  openReportEmail(`PSI Suggestion Report — ${now.toLocaleDateString()}`);
+});
+
+document.getElementById('periodReportBtn').addEventListener('click', () => {
+  const sel = document.getElementById('periodSelect');
+  if(!sel.value) return;
+  const periodStart = new Date(sel.value);
+  let periodEnd;
+  if(viewMode === 'weekly'){
+    periodEnd = new Date(periodStart); periodEnd.setDate(periodEnd.getDate()+7);
+  }else{
+    periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth()+1, 1);
+  }
+  const entries = allEntries.filter(e => {
+    const d = new Date(e.submitted_at);
+    return d >= periodStart && d < periodEnd;
+  }).sort((a,b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+
+  const label = viewMode === 'weekly' ? weekLabel(periodStart) : monthLabel(periodStart);
+  const doc = buildPdf(entries, `${viewMode === 'weekly' ? 'Weekly' : 'Monthly'} Suggestion Report`, `${label} (${entries.length} submission${entries.length===1?'':'s'})`);
+  const filename = `PSI-Suggestions-${label.replace(/[^a-zA-Z0-9]+/g,'-')}.pdf`;
+  doc.save(filename);
+});
+</script>
+</body>
+</html>
