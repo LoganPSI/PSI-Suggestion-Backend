@@ -8,6 +8,7 @@ const cron = require('node-cron');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const LOGO_PATH = path.join(__dirname, 'public', 'logo.png');
+const PENTAGON_MARK_PATH = path.join(__dirname, 'public', 'pentagon-mark.png');
 
 // Render provides DATABASE_URL automatically when you link a Postgres database
 // to this web service. DASHBOARD_PASSCODE is one you set yourself.
@@ -52,7 +53,7 @@ function startOfWeek(d) {
 // report, the "generate instant report" button, and single-entry safety alerts.
 function buildReportPdf({ title, subtitle, entries }) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 48 });
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 48, bottom: 20, left: 48, right: 48 }, bufferPages: true });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -110,8 +111,27 @@ function buildReportPdf({ title, subtitle, entries }) {
       y += 16;
     });
 
+    addWatermarkToAllPages(doc);
     doc.end();
   });
+}
+
+function addWatermarkToAllPages(doc) {
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
+    const pageHeight = doc.page.height;
+    const pageWidth = doc.page.width;
+    try {
+      doc.opacity(0.55);
+      doc.image(PENTAGON_MARK_PATH, pageWidth / 2 - 12, pageHeight - 60, { width: 24 });
+      doc.opacity(1);
+    } catch (e) { /* logo missing — continue without it */ }
+    doc.fontSize(7.5).fillColor('#9AA6B5').font('Helvetica')
+      .text('AIR  ·  GAS  ·  OIL  ·  VACUUM  ·  WATER', 0, pageHeight - 34, {
+        width: pageWidth, align: 'center'
+      });
+  }
 }
 
 async function sendReportEmail({ to, subject, bodyText, pdfBuffer, filename }) {
