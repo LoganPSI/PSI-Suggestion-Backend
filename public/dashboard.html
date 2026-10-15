@@ -7,9 +7,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
-    --psi-blue: #014BA4;
-    --psi-blue-dark: #013165;
-    --psi-blue-tint: #EAF2FC;
+    --psi-blue: #174EA2;
+    --psi-blue-dark: #0F346D;
+    --psi-blue-tint: #EEF3FB;
     --psi-grey: #6B7280;
     --psi-grey-light: #E5E7EB;
     --ink: #12203A;
@@ -28,14 +28,16 @@
   .lock-wrap{
     max-width: 380px; margin: 90px auto; text-align:center;
   }
-  .lock-wrap .pentagon{ width:56px;height:56px;margin:0 auto 14px; }
+  .lock-wrap .logo{ height:44px; width:auto; display:block; margin:0 auto 22px; }
   .lock-wrap h1{ font-size:19px; color:var(--psi-blue-dark); margin:0 0 6px;}
   .lock-wrap p{ color:var(--psi-grey); font-size:13.5px; margin:0 0 20px; }
   .lock-wrap input{
     width:100%; padding:12px 14px; border:1.5px solid var(--psi-grey-light);
-    border-radius:9px; font-size:14.5px; margin-bottom:12px; text-align:center;
-    letter-spacing:2px;
+    border-radius:9px; font-size:14.5px; margin-bottom:10px;
   }
+  .lock-wrap .lock-switch{ font-size:12.5px; color:var(--psi-blue); background:none; border:none; cursor:pointer; font-weight:700; margin-top:14px; width:auto; padding:0; }
+  .lock-wrap .lock-switch:hover{ background:none; text-decoration:underline; }
+  .lock-ok{ color:#1E7B46; font-size:12.5px; margin-top:8px; font-weight:600; }
   .lock-wrap button{
     width:100%; background:var(--psi-blue); color:#fff; border:none;
     padding:12px; border-radius:9px; font-weight:700; font-size:14.5px; cursor:pointer;
@@ -47,7 +49,8 @@
   /* --- Header --- */
   header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:12px; }
   .brand{ display:flex; align-items:center; gap:12px; }
-  .brand svg{ width:40px;height:40px; }
+  .brand .logo{ height:34px; width:auto; }
+  .brand .logo + div{ border-left:1px solid var(--psi-grey-light); padding-left:12px; }
   .brand .name{ font-size:13px; font-weight:800; color:var(--psi-blue); letter-spacing:.02em; }
   .brand .sub{ font-size:11px; color:var(--psi-grey); font-weight:600; }
   .lockout-btn{ font-size:12px; color:var(--psi-grey); background:none; border:none; cursor:pointer; text-decoration:underline; }
@@ -115,34 +118,85 @@
   .empty{ text-align:center; padding:50px 20px; color:var(--psi-grey); }
   .empty svg{ margin-bottom:10px; opacity:.5; }
   .loading{ text-align:center; padding:60px 20px; color:var(--psi-grey); font-size:13.5px; }
+
+  /* --- Header user area --- */
+  .user-area{ display:flex; align-items:center; gap:14px; font-size:12.5px; color:var(--psi-grey); }
+  .user-area strong{ color:var(--ink); }
+
+  /* --- Manage access panel --- */
+  .admin-panel{ background:white; border:1px solid #EEF2F7; border-radius:12px; padding:18px 20px; margin-bottom:24px; }
+  .admin-panel h3{ margin:0 0 3px; font-size:15px; color:var(--psi-blue-dark); }
+  .admin-panel > p{ margin:0 0 14px; font-size:12.5px; color:var(--psi-grey); }
+  .add-user{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+  .add-user input[type=text], .add-user input[type=email]{
+    flex:1 1 180px; padding:9px 12px; border:1px solid var(--psi-grey-light); border-radius:9px; font-size:13px;
+  }
+  .add-user label{ font-size:12.5px; font-weight:600; color:var(--psi-grey); display:flex; align-items:center; gap:5px; }
+  .admin-msg{ font-size:12.5px; min-height:18px; margin-bottom:8px; font-weight:600; }
+  .admin-msg.err{ color:#C0392B; } .admin-msg.ok{ color:#1E7B46; }
+  .user-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .user-table th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--psi-grey); padding:8px 6px; border-bottom:1px solid #EEF2F7; }
+  .user-table td{ padding:10px 6px; border-bottom:1px solid #F3F5F9; vertical-align:middle; }
+  .user-table .em{ color:var(--psi-grey); font-size:12px; }
+  .pill{ font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; white-space:nowrap; }
+  .pill.active{ background:#E3F4EA; color:#1E7B46; }
+  .pill.invited{ background:var(--psi-blue-tint); color:var(--psi-blue-dark); }
+  .pill.pending{ background:#FDF1DC; color:#9A5B00; }
+  .row-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+  .mini{ font-size:12px; font-weight:700; border:none; border-radius:7px; padding:6px 10px; cursor:pointer; background:var(--psi-blue-tint); color:var(--psi-blue-dark); }
+  .mini.danger{ background:#FBE9E7; color:#B03A2E; }
+  .mini.go{ background:var(--psi-blue); color:white; }
+  @media (max-width:640px){ .user-table .hide-sm{ display:none; } }
 </style>
 </head>
 <body>
 
 <div id="lockScreen" class="lock-wrap">
-  <svg class="pentagon" viewBox="0 0 100 100">
-    <polygon points="50,4 96,38 78,92 22,92 4,38" fill="none" stroke="#014BA4" stroke-width="6"/>
-    <text x="50" y="60" font-family="Arial, sans-serif" font-weight="800" font-size="30" fill="#014BA4" text-anchor="middle">PSI</text>
-  </svg>
-  <h1>Management Access</h1>
-  <p>Enter the access code to view suggestion box submissions.</p>
-  <input type="password" id="passInput" placeholder="Access code" maxlength="20">
-  <button id="unlockBtn">View dashboard</button>
+  <img class="logo" src="/psi-group-logo.png" alt="PSI Group">
+  <h1 id="lockTitle">Leadership sign in</h1>
+  <p id="lockIntro">Sign in to view suggestion box submissions.</p>
+  <form id="authForm" autocomplete="on">
+    <input type="text" id="nameInput" placeholder="Your name" autocomplete="name" style="display:none;">
+    <input type="email" id="emailInput" placeholder="Work email" autocomplete="username" required>
+    <input type="password" id="passInput" placeholder="Password" autocomplete="current-password" required>
+    <button type="submit" id="unlockBtn">Sign in</button>
+  </form>
   <div class="lock-err" id="lockErr"></div>
-  <div class="lock-note">This is a basic passcode screen, not real authentication — anyone with this link and code can view responses. Don't share this link outside management.</div>
+  <div class="lock-ok" id="lockOk"></div>
+  <button class="lock-switch" id="modeSwitch" type="button">First time here? Set your password</button>
+  <div class="lock-note">Access is limited to the leadership team. If you've been added, use "First time here?" to set your password. Anyone else can request access, and an admin will need to approve it.</div>
 </div>
 
 <div class="wrap" id="dashboard" style="display:none;">
   <header>
     <div class="brand">
-      <svg viewBox="0 0 100 100"><polygon points="50,4 96,38 78,92 22,92 4,38" fill="none" stroke="#014BA4" stroke-width="6"/><text x="50" y="60" font-family="Arial, sans-serif" font-weight="800" font-size="30" fill="#014BA4" text-anchor="middle">PSI</text></svg>
+      <img class="logo" src="/psi-group-logo.png" alt="PSI Group">
       <div>
         <div class="name">SUGGESTION BOX — MANAGEMENT DASHBOARD</div>
         <div class="sub">All submissions since launch</div>
       </div>
     </div>
-    <button class="lockout-btn" id="lockOutBtn">Lock screen</button>
+    <div class="user-area">
+      <span>Signed in as <strong id="whoName"></strong></span>
+      <button class="btn-secondary" id="manageBtn" style="padding:8px 14px;">Manage access</button>
+      <button class="lockout-btn" id="lockOutBtn">Sign out</button>
+    </div>
   </header>
+
+  <div class="admin-panel" id="adminPanel" style="display:none;">
+    <h3>Manage access</h3>
+    <p>Only people on this list can see the dashboard. When you add someone, they get an email asking them to set a password. Everyone on the list can add or remove people.</p>
+    <form class="add-user" id="addUserForm">
+      <input type="text" id="newName" placeholder="Name">
+      <input type="email" id="newEmail" placeholder="Email" required>
+      <button class="btn-primary" type="submit" style="padding:9px 16px;">Give access</button>
+    </form>
+    <div class="admin-msg" id="adminMsg"></div>
+    <table class="user-table">
+      <thead><tr><th>Person</th><th>Status</th><th class="hide-sm">Last sign-in</th><th></th></tr></thead>
+      <tbody id="userRows"></tbody>
+    </table>
+  </div>
 
   <div class="stats" id="statsRow"></div>
 
@@ -170,47 +224,178 @@
 </div>
 
 <script>
-let currentPasscode = ""; // set when the user unlocks; sent with every API request
-
 const lockScreen = document.getElementById('lockScreen');
 const dashboard = document.getElementById('dashboard');
+const authForm = document.getElementById('authForm');
+const nameInput = document.getElementById('nameInput');
+const emailInput = document.getElementById('emailInput');
 const passInput = document.getElementById('passInput');
 const unlockBtn = document.getElementById('unlockBtn');
 const lockErr = document.getElementById('lockErr');
+const lockOk = document.getElementById('lockOk');
+const modeSwitch = document.getElementById('modeSwitch');
 const lockOutBtn = document.getElementById('lockOutBtn');
 
-unlockBtn.addEventListener('click', tryUnlock);
-passInput.addEventListener('keydown', e => { if(e.key === 'Enter') tryUnlock(); });
+let authMode = 'login'; // or 'setup' (first-time password / access request)
+let me = null;
 
-async function tryUnlock(){
-  const code = passInput.value;
-  lockErr.textContent = '';
+async function api(url, opts = {}){
+  const res = await fetch(url, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok){
+    const err = new Error(data.error || 'Something went wrong.');
+    err.status = res.status; err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+function setAuthMode(mode){
+  authMode = mode;
+  const setup = mode === 'setup';
+  document.getElementById('lockTitle').textContent = setup ? 'Set your password' : 'Leadership sign in';
+  document.getElementById('lockIntro').textContent = setup
+    ? "If an admin has added you, choose a password to get in. If not, this sends them an access request."
+    : 'Sign in to view suggestion box submissions.';
+  nameInput.style.display = setup ? '' : 'none';
+  passInput.placeholder = setup ? 'Choose a password (8+ characters)' : 'Password';
+  passInput.autocomplete = setup ? 'new-password' : 'current-password';
+  unlockBtn.textContent = setup ? 'Continue' : 'Sign in';
+  modeSwitch.textContent = setup ? 'Already set up? Sign in' : 'First time here? Set your password';
+  lockErr.textContent = ''; lockOk.textContent = '';
+}
+modeSwitch.addEventListener('click', () => setAuthMode(authMode === 'login' ? 'setup' : 'login'));
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  lockErr.textContent = ''; lockOk.textContent = '';
   unlockBtn.disabled = true;
+  const label = unlockBtn.textContent;
   unlockBtn.textContent = 'Checking...';
   try{
-    const res = await fetch('/api/submissions', { headers: { 'x-passcode': code } });
-    if(res.status === 401){
-      lockErr.textContent = 'Incorrect code — try again.';
+    const body = { email: emailInput.value, password: passInput.value, name: nameInput.value };
+    const data = await api(authMode === 'setup' ? '/api/auth/register' : '/api/auth/login', { method: 'POST', body });
+    if(data.pending){
+      lockOk.textContent = data.message;
+      passInput.value = '';
       return;
     }
-    if(!res.ok) throw new Error('Server error');
-    currentPasscode = code;
-    lockScreen.style.display = 'none';
-    dashboard.style.display = '';
-    loadData();
-  }catch(e){
-    lockErr.textContent = 'Could not reach the server — try again.';
+    passInput.value = '';
+    showDashboard(data.user);
+  }catch(err){
+    if(err.data && err.data.needsSetup) setAuthMode('setup');
+    lockErr.textContent = err.status ? err.message : 'Could not reach the server — try again.';
   }finally{
     unlockBtn.disabled = false;
-    unlockBtn.textContent = 'View dashboard';
+    unlockBtn.textContent = label;
   }
-}
-lockOutBtn.addEventListener('click', () => {
+});
+
+function showLogin(){
+  me = null;
   dashboard.style.display = 'none';
   lockScreen.style.display = '';
-  passInput.value = '';
-  lockErr.textContent = '';
-  currentPasscode = '';
+  document.getElementById('adminPanel').style.display = 'none';
+}
+
+function showDashboard(user){
+  me = user;
+  document.getElementById('whoName').textContent = user.name || user.email;
+  lockScreen.style.display = 'none';
+  dashboard.style.display = '';
+  loadData();
+}
+
+lockOutBtn.addEventListener('click', async () => {
+  try{ await api('/api/auth/logout', { method: 'POST' }); }catch(e){}
+  showLogin();
+});
+
+(async function checkSession(){
+  try{
+    const data = await api('/api/auth/me');
+    if(data.authenticated) showDashboard(data.user);
+  }catch(e){ /* stay on sign-in */ }
+})();
+
+/* ---------- Manage access (admins) ---------- */
+
+const adminPanel = document.getElementById('adminPanel');
+const adminMsg = document.getElementById('adminMsg');
+
+function setAdminMsg(text, ok){
+  adminMsg.textContent = text || '';
+  adminMsg.className = 'admin-msg ' + (ok ? 'ok' : 'err');
+}
+
+document.getElementById('manageBtn').addEventListener('click', () => {
+  const open = adminPanel.style.display === 'none';
+  adminPanel.style.display = open ? '' : 'none';
+  if(open){ setAdminMsg(''); loadUsers(); }
+});
+
+async function loadUsers(){
+  const tbody = document.getElementById('userRows');
+  try{
+    const users = await api('/api/admin/users');
+    tbody.innerHTML = users.map(u => {
+      const status = !u.approved ? '<span class="pill pending">Requested</span>'
+        : u.has_password ? '<span class="pill active">Active</span>'
+        : '<span class="pill invited">Invited</span>';
+      const last = u.last_login_at ? new Date(u.last_login_at).toLocaleDateString(undefined,{day:'numeric', month:'short', year:'numeric'}) : '—';
+      const isSelf = me && u.email === me.email;
+      let actions = '';
+      if(!u.approved){
+        actions = `<button class="mini go" data-act="approve" data-id="${u.id}">Approve</button>
+                   <button class="mini danger" data-act="remove" data-id="${u.id}" data-name="${esc(u.name || u.email)}">Decline</button>`;
+      }else if(!u.is_owner && !isSelf){
+        actions = (u.has_password ? `<button class="mini" data-act="reset" data-id="${u.id}" data-name="${esc(u.name || u.email)}">Reset password</button>` : '')
+                + `<button class="mini danger" data-act="remove" data-id="${u.id}" data-name="${esc(u.name || u.email)}">Remove</button>`;
+      }
+      return `<tr>
+        <td><div><strong>${esc(u.name || '')}</strong>${u.is_owner ? ' <span class="em">(owner)</span>' : ''}</div><div class="em">${esc(u.email)}</div></td>
+        <td>${status}</td>
+        <td class="hide-sm em">${last}</td>
+        <td><div class="row-actions">${actions}</div></td>
+      </tr>`;
+    }).join('');
+  }catch(err){
+    if(err.status === 401) return showLogin();
+    tbody.innerHTML = `<tr><td colspan="4" class="em">${esc(err.message)}</td></tr>`;
+  }
+}
+
+document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  setAdminMsg('');
+  try{
+    const email = document.getElementById('newEmail').value;
+    await api('/api/admin/users', { method: 'POST', body: {
+      name: document.getElementById('newName').value, email
+    }});
+    e.target.reset();
+    setAdminMsg(`Access given to ${email}. They've been emailed a link to set their password.`, true);
+    loadUsers();
+  }catch(err){ setAdminMsg(err.message); }
+});
+
+document.getElementById('userRows').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if(!btn) return;
+  const { act, id, name } = btn.dataset;
+  if(act === 'remove' && !confirm(`Remove ${name}'s access to the dashboard?`)) return;
+  if(act === 'reset' && !confirm(`Reset ${name}'s password? They'll be signed out and will need to use "First time here?" to set a new one.`)) return;
+  setAdminMsg('');
+  try{
+    if(act === 'approve') await api(`/api/admin/users/${id}/approve`, { method: 'POST' });
+    if(act === 'remove') await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    if(act === 'reset') await api(`/api/admin/users/${id}/reset-password`, { method: 'POST' });
+    loadUsers();
+  }catch(err){ setAdminMsg(err.message); }
 });
 
 let allEntries = [];
@@ -219,7 +404,8 @@ let viewMode = 'weekly';
 async function loadData(){
   document.getElementById('content').innerHTML = '<div class="loading">Loading submissions…</div>';
   try{
-    const res = await fetch('/api/submissions', { headers: { 'x-passcode': currentPasscode } });
+    const res = await fetch('/api/submissions');
+    if(res.status === 401) return showLogin();
     if(!res.ok) throw new Error('Server error');
     const rows = await res.json();
     allEntries = rows;
@@ -307,7 +493,7 @@ function renderGroups(){
 
 function esc(s){
   if(!s) return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 const QUESTION_LABELS = [
@@ -377,6 +563,15 @@ function populatePeriodSelect(){
 
 /* ---------- PDF report generation ---------- */
 
+// The logo is loaded once so PDFs can embed it (jsPDF needs it as a data URL)
+const LOGO_RATIO = 103 / 600;
+let logoDataUrl = null;
+fetch('/psi-group-logo.png').then(r => r.blob()).then(b => {
+  const fr = new FileReader();
+  fr.onload = () => { logoDataUrl = fr.result; };
+  fr.readAsDataURL(b);
+}).catch(() => {});
+
 function buildPdf(entries, title, subtitle){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -386,11 +581,17 @@ function buildPdf(entries, title, subtitle){
   const pageWidth = doc.internal.pageSize.getWidth();
   const maxWidth = pageWidth - marginX*2;
 
-  doc.setTextColor(1, 75, 164);
+  if(logoDataUrl){
+    doc.addImage(logoDataUrl, 'PNG', marginX, y - 22, 150, 150 * LOGO_RATIO);
+    y += 18;
+  }else{
+    doc.setTextColor(0,0,0);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(18);
+    doc.text('PSI Group', marginX, y);
+    y += 20;
+  }
   doc.setFont('helvetica','bold');
-  doc.setFontSize(18);
-  doc.text('Pentagon Service and Installation', marginX, y);
-  y += 20;
   doc.setFontSize(13);
   doc.setTextColor(18,32,58);
   doc.text(title, marginX, y);
@@ -400,7 +601,7 @@ function buildPdf(entries, title, subtitle){
   doc.setTextColor(107,114,128);
   doc.text(subtitle, marginX, y);
   y += 10;
-  doc.setDrawColor(234,242,252);
+  doc.setDrawColor(220,230,246);
   doc.line(marginX, y, pageWidth-marginX, y);
   y += 22;
 
@@ -422,7 +623,7 @@ function buildPdf(entries, title, subtitle){
     ensureSpace(4);
     doc.setFont('helvetica','bold');
     doc.setFontSize(11.5);
-    doc.setTextColor(1, 49, 101);
+    doc.setTextColor(0, 0, 0);
     const dateStr = new Date(e.submitted_at).toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}) + ' ' + new Date(e.submitted_at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
     doc.text(`${idx+1}. ${e.name}`, marginX, y);
     doc.setFont('helvetica','normal');
@@ -441,7 +642,7 @@ function buildPdf(entries, title, subtitle){
       if(q){
         doc.setFont('helvetica','bold');
         doc.setFontSize(9.5);
-        doc.setTextColor(1, 75, 164);
+        doc.setTextColor(23, 78, 162);
         doc.text(q, marginX, y);
         y += 12;
       }

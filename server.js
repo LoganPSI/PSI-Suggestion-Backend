@@ -4,20 +4,24 @@ const { Pool } = require('pg');
 const PDFDocument = require('pdfkit');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
+const bcrypt = require('bcrypt');
+const session = require('express-session');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const LOGO_PATH = path.join(__dirname, 'public', 'logo.png');
-const PENTAGON_MARK_PATH = path.join(__dirname, 'public', 'pentagon-mark.png');
+const LOGO_PATH = path.join(__dirname, 'public', 'psi-group-logo.png');
 
 // Render provides DATABASE_URL automatically when you link a Postgres database
-// to this web service. DASHBOARD_PASSCODE is one you set yourself.
+// to this web service.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false }
 });
 
-const DASHBOARD_PASSCODE = process.env.DASHBOARD_PASSCODE || 'psi2026';
+// The owner account. It can never be removed, so the dashboard can't be
+// locked out by accident. Everyone else is added in "Manage access".
+const OWNER_EMAIL = (process.env.ADMIN_EMAIL || 'logan.t@psigroup.net.au').toLowerCase();
 const REPORT_RECIPIENTS = ['greg.t@psigroup.net.au', 'logan.t@psigroup.net.au'];
 
 // Email transport — sends via the Gmail account set up with an app password
@@ -60,15 +64,15 @@ function buildReportPdf({ title, subtitle, entries }) {
     doc.on('error', reject);
 
     try {
-      doc.image(LOGO_PATH, 48, 40, { width: 130 });
+      doc.image(LOGO_PATH, 48, 44, { width: 170 });
     } catch (e) { /* logo missing — continue without it */ }
 
-    doc.fontSize(16).fillColor('#013165').font('Helvetica-Bold')
+    doc.fontSize(16).fillColor('#000000').font('Helvetica-Bold')
       .text(title, 48, 110);
     doc.fontSize(10).fillColor('#6B7280').font('Helvetica')
       .text(subtitle, 48, 132);
 
-    doc.moveTo(48, 156).lineTo(547, 156).strokeColor('#EAF2FC').stroke();
+    doc.moveTo(48, 156).lineTo(547, 156).strokeColor('#DCE6F6').stroke();
     doc.moveDown(2);
     let y = 168;
 
@@ -82,7 +86,7 @@ function buildReportPdf({ title, subtitle, entries }) {
       const dateStr = new Date(e.submitted_at).toLocaleString('en-AU', {
         weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
       });
-      doc.fontSize(11.5).fillColor('#013165').font('Helvetica-Bold')
+      doc.fontSize(11.5).fillColor('#000000').font('Helvetica-Bold')
         .text(`${idx + 1}. ${e.name}`, 48, y, { continued: false });
       doc.fontSize(9).fillColor('#6B7280').font('Helvetica')
         .text(dateStr, 400, y, { width: 147, align: 'right' });
@@ -98,7 +102,7 @@ function buildReportPdf({ title, subtitle, entries }) {
       qas.forEach(([label, answer]) => {
         if (y > 740) { doc.addPage(); y = 56; }
         if (label) {
-          doc.fontSize(9.5).fillColor('#014BA4').font('Helvetica-Bold').text(label, 48, y);
+          doc.fontSize(9.5).fillColor('#174EA2').font('Helvetica-Bold').text(label, 48, y);
           y += 13;
         }
         doc.fontSize(10).fillColor('#12203A').font('Helvetica');
@@ -122,13 +126,8 @@ function addWatermarkToAllPages(doc) {
     doc.switchToPage(range.start + i);
     const pageHeight = doc.page.height;
     const pageWidth = doc.page.width;
-    try {
-      doc.opacity(0.55);
-      doc.image(PENTAGON_MARK_PATH, pageWidth / 2 - 12, pageHeight - 60, { width: 24 });
-      doc.opacity(1);
-    } catch (e) { /* logo missing — continue without it */ }
     doc.fontSize(7.5).fillColor('#9AA6B5').font('Helvetica')
-      .text('AIR  ·  GAS  ·  OIL  ·  VACUUM  ·  WATER', 0, pageHeight - 34, {
+      .text('PSI GROUP  ·  SPEED  ·  QUALITY  ·  KNOWLEDGE', 0, pageHeight - 34, {
         width: pageWidth, align: 'center'
       });
   }
@@ -144,17 +143,70 @@ async function sendReportEmail({ to, subject, bodyText, pdfBuffer, filename }) {
   });
 }
 
+function escHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Render terminates HTTPS in front of the app, so trust its proxy headers —
+// needed for secure cookies and for building links back to this site.
+app.set('trust proxy', 1);
 app.use(express.json());
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, x-passcode, x-cron-secret');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
-  next();
-});
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Create the table on startup if it doesn't already exist
+// ============================================
+// SESSIONS — stored in Postgres so sign-ins survive deploys and spin-downs
+// ============================================
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_SECRET = process.env.SESSION_SECRET
+  || (process.env.DATABASE_URL && crypto.createHash('sha256').update('psi-suggestions:' + process.env.DATABASE_URL).digest('hex'))
+  || crypto.randomBytes(32).toString('hex');
+if (!process.env.SESSION_SECRET) {
+  console.warn('SESSION_SECRET is not set; deriving one from DATABASE_URL. Set SESSION_SECRET in Render for a proper secret.');
+}
+
+const sessionExpiry = sess => new Date(
+  (sess && sess.cookie && sess.cookie.expires) ? sess.cookie.expires : Date.now() + SESSION_TTL_MS
+);
+
+class PgSessionStore extends session.Store {
+  async get(sid, cb) {
+    try {
+      const r = await pool.query('SELECT sess FROM user_sessions WHERE sid = $1 AND expire > NOW()', [sid]);
+      cb(null, r.rows.length ? r.rows[0].sess : null);
+    } catch (e) {
+      console.error('Session read failed:', e.message);
+      cb(null, null);
+    }
+  }
+  async set(sid, sess, cb) {
+    try {
+      await pool.query(
+        `INSERT INTO user_sessions (sid, sess, expire) VALUES ($1, $2, $3)
+         ON CONFLICT (sid) DO UPDATE SET sess = $2, expire = $3`,
+        [sid, sess, sessionExpiry(sess)]
+      );
+      cb && cb(null);
+    } catch (e) { console.error('Session write failed:', e.message); cb && cb(e); }
+  }
+  async destroy(sid, cb) {
+    try { await pool.query('DELETE FROM user_sessions WHERE sid = $1', [sid]); cb && cb(null); }
+    catch (e) { cb && cb(e); }
+  }
+  async touch(sid, sess, cb) {
+    try { await pool.query('UPDATE user_sessions SET expire = $2 WHERE sid = $1', [sid, sessionExpiry(sess)]); cb && cb(null); }
+    catch (e) { cb && cb(null); }
+  }
+}
+
+app.use(session({
+  store: new PgSessionStore(),
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: SESSION_TTL_MS, httpOnly: true, sameSite: 'lax', secure: !!process.env.RENDER },
+}));
+
+// Create the tables on startup if they don't already exist
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS submissions (
@@ -168,9 +220,249 @@ async function initDb() {
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      sid VARCHAR(255) PRIMARY KEY,
+      sess JSONB NOT NULL,
+      expire TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_user_sessions_expire ON user_sessions(expire)');
+  await pool.query('DELETE FROM user_sessions WHERE expire < NOW()');
+
+  // Who can see the dashboard. A row with approved = TRUE and no password is an
+  // invite: that person sets their own password the first time they sign in.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dashboard_users (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT,
+      password_hash TEXT,
+      approved BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_login_at TIMESTAMPTZ
+    );
+  `);
+  await pool.query(
+    `INSERT INTO dashboard_users (email, name, approved) VALUES ($1, 'Logan', TRUE)
+     ON CONFLICT (email) DO UPDATE SET approved = TRUE`,
+    [OWNER_EMAIL]
+  );
   console.log('Database ready.');
 }
 initDb().catch(err => console.error('Failed to set up database:', err));
+
+// ============================================
+// AUTH
+// ============================================
+const normEmail = e => String(e || '').toLowerCase().trim();
+
+// Looks the user up on every request rather than trusting the session alone,
+// so removing someone in "Manage access" locks them out straight away.
+async function loadUser(req) {
+  if (!req.session || !req.session.userId) return null;
+  const r = await pool.query('SELECT * FROM dashboard_users WHERE id = $1', [req.session.userId]);
+  const user = r.rows[0];
+  if (!user || !user.approved || !user.password_hash) return null;
+  return user;
+}
+
+async function requireAuth(req, res, next) {
+  try {
+    const user = await loadUser(req);
+    if (!user) return res.status(401).json({ error: 'Please sign in.' });
+    req.user = user;
+    next();
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not check sign-in.' }); }
+}
+
+const publicUser = u => ({
+  email: u.email, name: u.name
+});
+
+function startSession(req, user) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate(err => {
+      if (err) return reject(err);
+      req.session.userId = user.id;
+      req.session.save(e => e ? reject(e) : resolve());
+    });
+  });
+}
+
+const siteUrl = req => process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+
+async function adminEmails() {
+  const r = await pool.query('SELECT email FROM dashboard_users WHERE approved AND password_hash IS NOT NULL');
+  return r.rows.map(x => x.email);
+}
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const email = normEmail(req.body.email);
+    const password = req.body.password || '';
+    if (!email || !password) return res.status(400).json({ error: 'Enter your email and password.' });
+
+    const r = await pool.query('SELECT * FROM dashboard_users WHERE email = $1', [email]);
+    const user = r.rows[0];
+    if (user && user.approved && !user.password_hash) {
+      return res.status(409).json({ error: "You've been given access but haven't set a password yet — use \"First time here?\" below.", needsSetup: true });
+    }
+    if (!user || !user.password_hash || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Incorrect email or password.' });
+    }
+    if (!user.approved) return res.status(403).json({ error: 'Your access request is waiting for approval.' });
+
+    await startSession(req, user);
+    await pool.query('UPDATE dashboard_users SET last_login_at = now() WHERE id = $1', [user.id]);
+    res.json({ ok: true, user: publicUser(user) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Sign-in failed.' }); }
+});
+
+// First-time setup. If an admin has already added this email, the person sets
+// a password and goes straight in. Anyone else becomes a pending request that
+// an admin has to approve.
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const email = normEmail(req.body.email);
+    const name = String(req.body.name || '').trim();
+    const password = req.body.password || '';
+    if (!email || !password) return res.status(400).json({ error: 'Enter your email and a password.' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+
+    const hash = await bcrypt.hash(password, 10);
+    const r = await pool.query('SELECT * FROM dashboard_users WHERE email = $1', [email]);
+    const existing = r.rows[0];
+
+    if (existing && existing.password_hash) {
+      return res.status(400).json({ error: 'That email already has an account — sign in instead, or ask an admin to reset it.' });
+    }
+
+    if (existing && existing.approved) {
+      const u = await pool.query(
+        'UPDATE dashboard_users SET password_hash = $1, name = COALESCE(NULLIF($2, \'\'), name), last_login_at = now() WHERE id = $3 RETURNING *',
+        [hash, name, existing.id]
+      );
+      await startSession(req, u.rows[0]);
+      return res.json({ ok: true, user: publicUser(u.rows[0]) });
+    }
+
+    if (existing) {
+      await pool.query('UPDATE dashboard_users SET password_hash = $1, name = COALESCE(NULLIF($2, \'\'), name) WHERE id = $3', [hash, name, existing.id]);
+    } else {
+      await pool.query('INSERT INTO dashboard_users (email, name, password_hash) VALUES ($1, $2, $3)', [email, name || email.split('@')[0], hash]);
+    }
+
+    res.json({ ok: true, pending: true, message: "Request sent. You'll be able to sign in once an admin approves it." });
+
+    try {
+      await transporter.sendMail({
+        from: `"PSI Suggestion Box" <${process.env.GMAIL_USER}>`,
+        to: await adminEmails(),
+        subject: `Suggestion dashboard access request: ${name || email}`,
+        html: `<p><strong>${escHtml(name || 'Someone')}</strong> (${escHtml(email)}) has asked for access to the suggestion box dashboard.</p>
+               <p>Approve or decline it under <strong>Manage access</strong>: <a href="${siteUrl(req)}/dashboard.html">${siteUrl(req)}/dashboard.html</a></p>`
+      });
+    } catch (err) { console.error('Could not send access request email:', err.message); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not create your account.' }); }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const user = await loadUser(req);
+    res.json(user ? { authenticated: true, user: publicUser(user) } : { authenticated: false });
+  } catch (e) { res.json({ authenticated: false }); }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+// ============================================
+// ADMIN — manage who can see the dashboard
+// ============================================
+async function endSessionsFor(userId) {
+  await pool.query(`DELETE FROM user_sessions WHERE (sess->>'userId')::int = $1`, [userId]);
+}
+
+app.get('/api/admin/users', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT id, email, name, approved, (password_hash IS NOT NULL) AS has_password, created_at, last_login_at
+      FROM dashboard_users ORDER BY approved, lower(name)`);
+    res.json(r.rows.map(u => ({ ...u, is_owner: u.email === OWNER_EMAIL })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load users.' }); }
+});
+
+// Give someone access. They get an email telling them to set a password.
+app.post('/api/admin/users', requireAuth, async (req, res) => {
+  try {
+    const email = normEmail(req.body.email);
+    const name = String(req.body.name || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+
+    const r = await pool.query(
+      `INSERT INTO dashboard_users (email, name, approved) VALUES ($1, $2, TRUE)
+       ON CONFLICT (email) DO UPDATE SET approved = TRUE, name = COALESCE(NULLIF($2, ''), dashboard_users.name)
+       RETURNING *`,
+      [email, name || email.split('@')[0]]
+    );
+    res.json({ ok: true });
+
+    try {
+      const url = `${siteUrl(req)}/dashboard.html`;
+      await transporter.sendMail({
+        from: `"PSI Suggestion Box" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject: 'You have access to the PSI suggestion box dashboard',
+        html: `<p>Hi ${escHtml(r.rows[0].name)},</p>
+               <p>${escHtml(req.user.name || req.user.email)} has given you access to the PSI suggestion box dashboard.</p>
+               <p>${r.rows[0].password_hash ? 'Sign in' : 'Open the link below, choose <strong>First time here?</strong> and set a password'}: <a href="${url}">${url}</a></p>`
+      });
+    } catch (err) { console.error('Could not send invite email:', err.message); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not add user.' }); }
+});
+
+app.post('/api/admin/users/:id/approve', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('UPDATE dashboard_users SET approved = TRUE WHERE id = $1 RETURNING *', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'User not found.' });
+    res.json({ ok: true });
+
+    try {
+      const url = `${siteUrl(req)}/dashboard.html`;
+      await transporter.sendMail({
+        from: `"PSI Suggestion Box" <${process.env.GMAIL_USER}>`,
+        to: r.rows[0].email,
+        subject: 'Your suggestion dashboard access was approved',
+        html: `<p>Hi ${escHtml(r.rows[0].name)},</p><p>Your access has been approved. Sign in here: <a href="${url}">${url}</a></p>`
+      });
+    } catch (err) { console.error('Could not send approval email:', err.message); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not approve user.' }); }
+});
+
+// Clears their password and signs them out. They set a new one via "First time here?".
+app.post('/api/admin/users/:id/reset-password', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('UPDATE dashboard_users SET password_hash = NULL WHERE id = $1 AND approved RETURNING id', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'User not found.' });
+    await endSessionsFor(r.rows[0].id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not reset password.' }); }
+});
+
+// Removes access completely (also used to decline a pending request).
+app.delete('/api/admin/users/:id', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, email FROM dashboard_users WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'User not found.' });
+    if (r.rows[0].email === OWNER_EMAIL) return res.status(400).json({ error: "The owner account can't be removed." });
+    if (r.rows[0].id === req.user.id) return res.status(400).json({ error: "You can't remove yourself." });
+    await endSessionsFor(r.rows[0].id);
+    await pool.query('DELETE FROM dashboard_users WHERE id = $1', [r.rows[0].id]);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not remove user.' }); }
+});
 
 // Submit a new suggestion (public — anyone with the form link can post)
 app.post('/api/submit', async (req, res) => {
@@ -217,12 +509,8 @@ app.post('/api/submit', async (req, res) => {
   }
 });
 
-// Fetch all suggestions — protected by a simple passcode header
-app.get('/api/submissions', async (req, res) => {
-  const passcode = req.headers['x-passcode'];
-  if (passcode !== DASHBOARD_PASSCODE) {
-    return res.status(401).json({ error: 'Incorrect passcode.' });
-  }
+// Fetch all suggestions — signed-in, approved dashboard users only
+app.get('/api/submissions', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(`SELECT * FROM submissions ORDER BY submitted_at DESC`);
     res.json(result.rows);
